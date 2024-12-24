@@ -114,6 +114,7 @@ import snntorch as snn
 from snntorch import surrogate
 from snntorch import functional as SF
 from snntorch import utils
+from matplotlib import pyplot as plt
 
 class SpkNet(nn.Module):
 
@@ -124,11 +125,11 @@ class SpkNet(nn.Module):
         self.pool = nn.MaxPool2d(2, 2)
 
         # (batch_size, 3, 360, 160)
-        self.conv1 = nn.Conv2d(3, 16, 5)
+        self.conv1 = nn.Conv2d(3, 16, 3)
         self.lifc1 = snn.Leaky(beta=beta, spike_grad=spike_grad)
-        self.conv2 = nn.Conv2d(16, 32, 5)
+        self.conv2 = nn.Conv2d(16, 32, 3)
         self.lifc2 = snn.Leaky(beta=beta, spike_grad=spike_grad)
-        self.conv3 = nn.Conv2d(32, 64, 5)
+        self.conv3 = nn.Conv2d(32, 64, 3)
         self.lifc3 = snn.Leaky(beta=beta, spike_grad=spike_grad)
 
         self.fc_input_size = fc_input_size
@@ -143,13 +144,16 @@ class SpkNet(nn.Module):
         self.lin4 = nn.Linear(hidden_size, output_size)
         self.lif4 = snn.Leaky(beta=beta, spike_grad=spike_grad)
 
-    def display_conv(self, data, batch_size, c1, c2, x, y):
+    def display_conv(self, data, c1, c2, x, y):
+        batch_size = data.shape[0]
         for b in range(batch_size):
-            data = np.zeros(c1 * c2, )
+            result = np.zeros((c1 * x, c2 * y))
             for i in range(c1):
                 for j in range(c2):
-                    data[c1 * i + j
-                    # working on this right now
+                    result[x*i : x*(i+1), y*j : y*(j+1)] = data[b, c1 * i + j].detach().numpy()
+            plt.subplot(1, batch_size, b + 1)
+            plt.imshow(result, cmap='viridis')
+        plt.show()
 
     def forward(self, x):
         spk_rec = []
@@ -182,6 +186,13 @@ class SpkNet(nn.Module):
             out = self.pool(out)
             spk_c3, mem_c3 = self.lifc3(out, mem_c3)
 
+            # 64 * 43 * 18
+            if step == 50:
+                print('try display')
+                self.display_conv(spk_c3, 8, 8, 43, 18)
+                print('success')
+                exit()
+
             # FC
             out = spk_c3.view(-1, self.fc_input_size) # Flatten
             out = self.lin1(out)
@@ -204,7 +215,7 @@ spike_grad = surrogate.fast_sigmoid(slope=25)
 beta = 0.9
 
 # model
-fc_input_size = 64 * 41 * 16 # 41984
+fc_input_size = 64 * 43 * 18 # 41984
 hidden_size = 1
 output_size = 100
 model = SpkNet(fc_input_size, hidden_size, output_size, beta, spike_grad)
